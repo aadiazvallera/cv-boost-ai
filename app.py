@@ -1,6 +1,7 @@
 import json
 import streamlit as st
-from openai import OpenAI
+from google import genai
+from google.genai import types
 from pypdf import PdfReader
 
 # 1. Configuración de la página
@@ -21,8 +22,8 @@ st.divider()
 
 # 3. Sidebar: Configuración de API Key
 st.sidebar.header("⚙️ Configuración")
-api_key = st.sidebar.text_input("Ingresá tu OpenAI API Key:", type="password")
-st.sidebar.caption("Necesitás una API Key activa de OpenAI para procesar la información.")
+api_key = st.sidebar.text_input("Ingresá tu Gemini API Key:", type="password")
+st.sidebar.caption("Obtené tu API Key gratuita en Google AI Studio (aistudio.google.com).")
 
 # 4. Formulario de Inputs del Usuario
 col1, col2 = st.columns([1, 1])
@@ -31,7 +32,7 @@ with col1:
     st.subheader("1️⃣ Puesto Objetivo")
     puesto_objetivo = st.text_input(
         "¿A qué rol o puesto querés postular?",
-        placeholder="Ej: Analista de Datos Junior / Business Intelligence"
+        placeholder="Ej: Analista Financiero / Data Analyst"
     )
 
 with col2:
@@ -57,7 +58,7 @@ st.divider()
 # Botón principal para ejecutar el análisis
 btn_procesar = st.button("✨ Procesar y Optimizar CV", type="primary", use_container_width=True)
 
-# 5. Funciones de Inteligencia Artificial (OpenAI API)
+# 5. Funciones de IA con la API de Google Gemini
 def evaluar_cv(client, puesto, cv):
     prompt_evaluacion = f"""
     Sos un reclutador senior y especialista en sistemas ATS. Analiza el siguiente CV en relación con el puesto objetivo indicado y genera una evaluación en formato JSON estructurado.
@@ -74,12 +75,14 @@ def evaluar_cv(client, puesto, cv):
       "critica_constructiva": [(lista de 3 recomendaciones concretas)]
     }}
     """
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt_evaluacion}],
-        response_format={"type": "json_object"}
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt_evaluacion,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json"
+        )
     )
-    return json.loads(response.choices[0].message.content)
+    return json.loads(response.text)
 
 def optimizar_cv(client, puesto, cv, palabras_clave):
     prompt_optimizacion = f"""
@@ -98,25 +101,25 @@ def optimizar_cv(client, puesto, cv, palabras_clave):
       # Habilidades Clave
       # Educación
     """
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt_optimizacion}]
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt_optimizacion
     )
-    return response.choices[0].message.content
+    return response.text
 
 # 6. Lógica de Ejecución
 if btn_procesar:
     if not api_key:
-        st.error("⚠️ Por favor, ingresá tu OpenAI API Key en el panel lateral para continuar.")
+        st.error("⚠️ Por favor, ingresá tu Gemini API Key en el panel lateral para continuar.")
     elif not puesto_objetivo:
         st.warning("⚠️ Debes ingresar el Puesto Objetivo.")
     elif not texto_cv.strip():
         st.warning("⚠️ Debes ingresar o cargar el texto de tu CV.")
     else:
         try:
-            client = OpenAI(api_key=api_key)
+            client = genai.Client(api_key=api_key)
             
-            with st.spinner("🤖 Analizando compatibilidad y procesando datos con IA..."):
+            with st.spinner("🤖 Analizando compatibilidad y procesando datos con Gemini IA..."):
                 # Paso 1: Evaluación
                 resultado_eval = evaluar_cv(client, puesto_objetivo, texto_cv)
                 
@@ -158,7 +161,6 @@ if btn_procesar:
                 st.subheader("📝 Versión Optimizada para ATS")
                 st.markdown(cv_optimizado)
                 
-                # Botón para descargar el CV optimizado en formato Markdown / Texto
                 st.download_button(
                     label="📥 Descargar CV Optimizado (.md)",
                     data=cv_optimizado,
